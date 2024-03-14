@@ -7,3 +7,6 @@ No setup at all. It's just a txt file. You can read it here.
 ## What to do now?
 Read [before.txt](before.txt)  
 Read [after.txt](after.txt)
+
+### sneak peak
+You will see me create a new language - that you understand.
