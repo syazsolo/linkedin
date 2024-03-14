@@ -162,7 +162,7 @@ const { シーン, noComprende, log } = require('./common.js');
 //    |    
 //    | --- goodluck ----------------------------------------------------------------------------
 
-// 🔦 = me shining the way
+// 🔦 = me with a flashlight
 // ❌ = following code is wrong
 // _die⚡ = stands for 'Dull IssuEs'
 
