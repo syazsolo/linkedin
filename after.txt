@@ -753,7 +753,7 @@ exports.bankHandler = scene => {
     scene.action(/.*/, noComprende);
     scene.on(message(), noComprende);
 
-    // _die⚡ unnecessary function
+    // _die⚡ is this necessary? because this is adding to a lot of noise.
     function clearSession(ctx) {
         ctx.session.SettingAction = null;
         ctx.session.AddBankList = null;
