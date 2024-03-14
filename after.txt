@@ -1,0 +1,774 @@
+
+// CONTEXT
+// - This code is part of a Telegram bot that handles webhook updates from Telegram
+// - The Telegram bot is based on the telegraf.js NPM package
+// - Assume multiple instances of bots are created and served by one web server
+// - The code describes a `scene` (telegraf.js concept) for users to manage their banks (list, add, delete)
+// - This code is called by a bot instance after instantiation and before it is served by the web server
+// - Assume that part of the refactoring involves porting the code to TypeScript
+
+// TASK
+// - Review this code and suggest ways to refactor the code
+// - Be as critical as possible
+
+// Feel free to ask anything that you need further clarification on
+
+
+
+// Below are references from the telegraf package
+// The API can be referred to at https://telegraf.js.org/
+const { Markup } = require('telegraf');
+const { message } = require('telegraf/filters');
+
+// common.js is a shared utility library
+// シーン is an enum of all `scenes` in this system
+// noComprende is a utility function to handle unexpected user input
+// log is a utility function to log any error messages
+const { シーン, noComprende, log } = require('./common.js');
+
+// Below `scene` parameter is an instance of `telegraf.Scene.BaseScene` that is created in the calling bot code and passed in here
+// `ctx` is the telegraf context object that holds information about the current request and session
+// `ctx.session` holds current session state
+// `ctx.stub.xxx` are API calls to manipulate the bank data in the database
+// `ctx.reply` and `ctx.reply$` are to make replies back to the Telegram user of the current request
+
+// start task
+
+/** *** ******************************************************************************************************************************************** */
+
+// ✨ Before we look at the actual code, lets look at the overview of what the code is trying to accomplish
+//    | ------------------------------------------------------------------------      
+//    |
+//    | ----------------------------------- |
+//    // most of the code in this file belongs to this main chunk
+//                      
+//    ➡️ 1st point of entry: enter scene {
+//          const fetch = trigger_backoffice(getMemberBanks) 
+//                
+//          !fetch.success ? {
+//              reply(sorry)
+//              ~ void  
+//          }
+//          
+//          fetch.data.is_empty ? {
+//              ➡️ add bank
+//              ~ void
+//          }
+//                              
+//          ➡️ action center
+//          ~ void
+//    }         
+//              
+//    ➡️ add bank {
+//          const fetch = trigger_backoffice(getBanks)
+//              
+//          !fetch.success ? {
+//              reply(sorry)
+//              ~ void
+//          }
+//                              
+//          #each fetch.data
+//              selectBank() => {
+//                  allowPermission(enter_acc_name)
+//                  ~ void
+//              }
+//    }
+//                                                                    
+//    ➡️ action center {                                                          
+//          add bank ? {
+//              ➡️ add bank
+//          }
+//          delete bank? {
+//              ➡️ delete bank
+//          }
+//          ~ void
+//    }                                                          
+//                                                                    
+//    ➡️ delete bank {
+//          const fetch = trigger_backoffice(getMemberBanks) 
+//                                      
+//          !fetch.success ? || fetch.data.is_empty ? {
+//              reply(sorry)
+//              ~ void
+//          }
+//                           
+//          remember(delete_list)         
+//          selectBank = () => ➡️ select bank to delete
+//          ~ void
+//    }         
+//          
+//    ➡️ select bank to delete {
+//          const list = recall(delete_list).filter(bank)
+//          
+//          list.size === 1 ? {
+//              ➡️ confirm delete 
+//          }
+//              
+//          (list) => ➡️ confirm delete 
+//    }         
+//                                                                    
+//    ➡️ confirm delete {
+//          confirm? {
+//              const fetch = trigger_backoffice(deleteMemberBank)
+//              !fetch.success ? {
+//                  go(main menu) ? {
+//                      ➡️ main menu
+//                  }
+//              }
+//                  
+//              go(action center) ? {
+//                  ➡️ action center
+//              }       
+//              ~ void
+//          }           
+//    }                     
+//                       
+//    ➡️ main menu {                                                              
+//          exit_scene()                                                               
+//    }                      
+//                              
+//    | ----------------------------------- |
+//    ➡️ 2nd point of entry : user is typing... { 
+//          user sends 'x' {
+//              !hasPermission(enter_acc_name) ? || !hasPermission(enter_acc_no) ? {
+//                  noComprende()
+//                  ~ void
+//              }  
+//                 
+//              update_bank_information = : 1st step {
+//                  is 'x' a valid bankAccountName ? {
+//                       ~ void
+//                  } finally true {
+//                      allowPermission(enter_acc_no)  
+//                  } => hasPermission(enter_acc_no) : 2nd step {
+//                      is 'x' a valid bankAccountNo ? {
+//                          ~ void
+//                      } finally true {
+//                          () => confirm_bank_details_are_correct: 3rd step {
+//                                const fetch = trigger_backoffice(addMemberBank)
+//                                        
+//                                !fetch.success ? {
+//                                    reply(sorry)
+//                                }
+//                                                     
+//                                reply(congrats!) 
+//                                ~ void
+//                          }                                     
+//                      }
+//                  }
+//              }       
+//          }
+//    }       
+//    |    
+//    | --- goodluck ----------------------------------------------------------------------------
+
+// 🔦 = me shining the way
+// ❌ = following code is wrong
+// _die⚡ = stands for 'Dull IssuEs'
+
+exports.bankHandler = scene => {
+
+    //  ➡️ 1st point of entry: enter scene {
+    //        const fetch = trigger_backoffice(getMemberBanks) 
+    //            
+    //        !fetch.success ? {
+    //            reply(sorry)
+    //            ~ void  
+    //        }
+    //                                  
+    //        fetch.data.is_empty ? {
+    //            ➡️ add bank
+    //            ~ void 
+    //        }
+    //                          
+    //        ➡️ action center
+    //        ~ void
+    //  }
+    scene.enter(async (ctx) => {
+        // _die⚡ try catch wrapping the whole function. 
+        // these try catches take many lines of the file, and they add to 1-level of tab too.
+        // I consider these as noise, and I like to minimize these as much as possible.
+        try {
+
+            // _die⚡ functional code is better 
+            let caption = '';
+            // _die⚡ if can wrap Markup.button.callback in a function,
+            // `const menuButton = callback('Main Menu', 'menuAction')` is easier to understand.
+            const menuButton = Markup.button.callback('Main Menu', 'menuAction');
+            // 🔦: const fetch = trigger_backoffice(getMemberBanks)
+            const response = await ctx.stub.getMemberBanks(ctx.from.id);
+
+            // _die⚡ response.dataList
+            // _die⚡ this function is not properly thought of before written. this is a wrong structure.
+            // 🔦: !fetch.success ? ❌ 
+            if (response.success && response.dataList) {
+
+                // _die⚡ should be datalist.length === 0. even better, datalist.isEmpty() 
+                // 🔦: fetch.data.is_empty ?
+                if (response.dataList.length < 1) {
+                    // 🔦: ➡️ add bank
+                    await addBankAction(ctx);
+                    // 🔦: ~ void
+                } else {
+                    // 🔦: ➡️ action center
+                    await myBankAction(ctx);
+                    // 🔦: ~ void
+                }
+            }
+            else {
+                // 🔦: reply(sorry)
+                caption = 'Failed to get list of your banks.';
+                await ctx.reply(caption, Markup.inlineKeyboard([menuButton]))
+                    .then(msg => ctx.addToHistory(msg.message_id));
+                // 🔦: ~ void
+            }
+        } catch (err) {
+            // _die⚡ Ive mentioned how many lines these try catches are taking
+            await log(ctx, err);
+        }
+
+    });
+
+    // due to how telegraf is designed, the code tends to have bridges like this:
+    // _die⚡ a random bridge to action center
+    scene.action('myBankAction', async ctx => {
+        // _die⚡ what clear session? why so suddenly?
+        clearSession(ctx);
+        // 🔦: ➡️ action center
+        await myBankAction(ctx);
+    });
+
+    // _die⚡ random bridge to where. we are not properly introduced with addBankAction yet.
+    scene.action('addBankAction', async ctx => {
+        // later on we learn that this is ➡️ add bank
+        await addBankAction(ctx);
+    });
+
+    // _die⚡ , what happened to addBankAction?
+    // _die⚡ , why are we going to delete? 
+
+    //  ➡️ delete bank {
+    //        const fetch = trigger_backoffice(getMemberBanks) 
+    //          
+    //        !fetch.success ? || fetch.data.is_empty ? {
+    //            reply(sorry)
+    //            ~ void
+    //        }
+    //        
+    //        remember(delete_list)    
+    //        selectBank = () => ➡️ select bank to delete
+    //        ~ void
+    //  }       
+    scene.action('deleteBankAction', async (ctx) => {
+        try {
+            let caption = 'Select bank to delete:\n';
+            const backButton = 'Back';
+            // 🔦: const fetch = trigger_backoffice(getMemberBanks)
+            const response = await ctx.stub.getMemberBanks(ctx.from.id);
+            let inlineKeyboard = [];
+            let buttonArray = [];
+
+            // -die⚡ wrong structure
+            // 🔦: !fetch.success ? || fetch.data.is_empty ? ❌ 
+            if (response.success && response.dataList.length) {
+                // 🔦: remember(delete_list) 
+                ctx.session.DeleteBankList = response.dataList.sort((a, b) => (a.name.localeCompare(b.name)));
+                // 🔦: selectBank
+                const bank_names = new Set(ctx.session.DeleteBankList.map(bank => bank.name));
+                if (bank_names.size) {
+                    bank_names.forEach(name => {
+                        //🔦: () => ➡️ select bank to delete
+                        buttonArray.push(Markup.button.callback(name, 'selectDeleteBankTypeAction:' + name));
+                    });
+                }
+                while (buttonArray.length > 0) {
+                    inlineKeyboard.push(buttonArray.splice(0, 3));
+                }
+            }
+            else {
+                // 🔦: !fetch.success ? || fetch.data.is_empty ? {}
+                // 🔦: reply(sorry)
+                caption = 'You do not have any banks to delete.';
+            }
+            inlineKeyboard.push([Markup.button.callback(backButton, 'backAction')]);
+            inlineKeyboard = Markup.inlineKeyboard(inlineKeyboard);
+            await ctx.reply(caption, inlineKeyboard)
+                .then(msg => ctx.addToHistory(msg.message_id));
+            // 🔦: ~ void
+
+        } catch (err) {
+            await log(ctx, err);
+        }
+    });
+
+    //  ➡️ select bank to delete {
+    //        const list = recall(delete_list).filter(bank)
+    //        
+    //        list.size === 1 ? {
+    //            ➡️ confirm delete 
+    //        }
+    //        
+    //        (list) => ➡️ confirm delete 
+    //  }
+    scene.action(/^selectDeleteBankTypeAction:(.*)/, async (ctx) => {
+        let caption = 'Your banks:\n';
+        let buttonArray = [];
+        let inlineKeyboard = [];
+        // 🔦: const list = recall(delete_list).filter(bank)
+        let acc_list = ctx.session.DeleteBankList.filter(function (val) {
+            return val.name == ctx.match[1];
+        });
+
+        // 🔦: list.size === 1 ? {
+        if (acc_list.length == 1) {
+            ctx.session.DeleteMemberBankId = acc_list[0].id;
+            // 🔦: ➡️ confirm delete 
+            await selectDeleteBank(ctx);
+            return;
+        }
+
+        acc_list.forEach(function (val, index) {
+            caption += `${index + 1}.\nBank: ${val.name || '-'}\nAccount Name: ${val.accountHolderName || '-'}\nAccount No: ${val.accountNumber || '-'}`;
+            // 🔦: (list) => ➡️ confirm delete 
+            buttonArray.push(Markup.button.callback(index + 1, 'selectDeleteBankAction:' + val.id));
+        });
+        const menuButton = 'Main Menu';
+        const backButton = 'Back';
+        while (buttonArray.length > 0) {
+            inlineKeyboard.push(buttonArray.splice(0, 5));
+        }
+        inlineKeyboard.push([Markup.button.callback(backButton, 'myBankAction'), Markup.button.callback(menuButton, 'menuAction')]);
+        inlineKeyboard = Markup.inlineKeyboard(inlineKeyboard);
+        await ctx.reply(caption, {
+            parse_mode: 'HTML',
+            ...inlineKeyboard
+        })
+            .then(msg => ctx.addToHistory(msg.message_id));
+    });
+
+    // _die⚡ random bridge ➡️ confirm delete 
+    scene.action(/^selectDeleteBankAction:(.*)/, async (ctx) => {
+        ctx.session.DeleteMemberBankId = ctx.match[1];
+        await selectDeleteBank(ctx);
+    });
+
+    // extension of ➡️ add bank
+    // not sure if this is necessary
+    scene.action(/^selectBankAction:(.*):(.*)/, async (ctx) => {
+        // 🔦: allowPermission(enter_acc_name)
+        ctx.session.SettingAction = 'EnterAccountName';
+        ctx.session.AddBankId = ctx.match[1];
+        ctx.session.AddBankName = ctx.match[2];
+        const caption = `Bank: ${ctx.session.AddBankName}\nEnter Account Name:`;
+        const backButton = 'Back';
+        const inlineKeyboard = Markup.inlineKeyboard([
+            [Markup.button.callback(backButton, 'myBankAction')],
+        ]);
+        await ctx.reply(caption, inlineKeyboard)
+            .then(msg => ctx.addToHistory(msg.message_id));
+
+        // 🔦: ~ void
+    });
+
+    // confirm_bank_details_are_correct: 3rd step {
+    //     const fetch = trigger_backoffice(addMemberBank)
+    //             
+    //     !fetch.success ? {
+    //         reply(sorry)
+    //     }
+    //                          
+    //     reply(congrats!) 
+    //     ~ void
+    // }   
+    scene.action('addBankAPIAction', async ctx => {
+        try {
+            // 🔦: const fetch = trigger_backoffice(addMemberBank)
+            const response = await ctx.stub.addMemberBank(ctx.from.id, ctx.session.AddBankAccountNo, ctx.session.AddBankAccountName, ctx.session.AddBankId);
+            let caption = '';
+            let inlineKeyboard = [];
+            const menuButton = 'Main Menu';
+            // 🔦: !fetch.success ? ❌
+            if (response.success) {
+                // 🔦: reply(congrats!) 
+                const backButton = 'My Banks';
+                inlineKeyboard = Markup.inlineKeyboard([
+                    [Markup.button.callback(backButton, 'myBankAction')],
+                    [Markup.button.callback(menuButton, 'menuAction')]
+                ]);
+                clearSession(ctx);
+                let bank = response.data;
+                caption = `SUCCESS!\nBank: ${bank.name || '-'}\nAccount Name: ${bank.accountHolderName || '-'}\nAccount No: ${bank.accountNumber || '-'}`;
+            }
+            else {
+                inlineKeyboard = Markup.inlineKeyboard([
+                    [Markup.button.callback(menuButton, 'menuAction')]
+                ]);
+                // 🔦: reply(sorry)
+                if (response.message.includes('UNIQ')) {
+                    caption = `The bank already exists.`;
+                } else {
+                    caption = `Invalid bank details entered.`;
+                }
+            }
+
+            await ctx.reply(caption, { parse_mode: 'HTML', ...inlineKeyboard })
+                .then(msg => ctx.addToHistory(msg.message_id));
+            // 🔦: ~ void
+
+        } catch (err) {
+            await log(ctx, err);
+        }
+    });
+
+    // extension ➡️ confirm delete
+    //
+    //  const fetch = trigger_backoffice(deleteMemberBank)
+    //  (!fetch.success) {
+    //      go(main menu) ? {
+    //          ➡️ main menu
+    //      }
+    //  }
+    //     
+    //  go(action center) ? {
+    //      ➡️ action center
+    //  }
+    //     
+    //  ~ void
+    //
+    scene.action('deleteBankAPIAction', async (ctx) => {
+        // _die⚡ should not separate from ➡️ confirm delete
+        try {
+            // 🔦: const fetch = trigger_backoffice(deleteMemberBank)
+            const response = await ctx.stub.deleteMemberBank(ctx.from.id, ctx.session.DeleteMemberBankId);
+            let caption = '';
+            let inlineKeyboard = [];
+            if (response.success) {
+                const backButton = 'Back';
+                // 🔦: go(action center) ? {}
+                inlineKeyboard = Markup.inlineKeyboard([
+                    [Markup.button.callback(backButton, 'myBankAction')],
+                ]);
+                clearSession(ctx);
+                caption = 'Bank was deleted.';
+            }
+            else {
+                // 🔦: (!fetch.success) {
+                // 🔦: go(main menu) ? {}
+                const menuButton = 'Main Menu';
+                inlineKeyboard = Markup.inlineKeyboard([
+                    [Markup.button.callback(menuButton, 'menuAction')]
+                ]);
+                caption = 'Invalid delete.';
+            }
+
+            await ctx.reply(caption, { parse_mode: 'HTML', ...inlineKeyboard })
+                .then(msg => ctx.addToHistory(msg.message_id));
+
+            //  🔦: ~ void
+
+        } catch (err) {
+            await log(ctx, err);
+        }
+    });
+
+    //  ➡️ action center {                                                          
+    //        add bank ? {
+    //            ➡️ add bank
+    //        }
+    //        delete bank? {
+    //            ➡️ delete bank
+    //        }
+    //        ~ void
+    //  }      
+    async function myBankAction(ctx) {
+        const backButton = 'Back';
+        const addBankButton = 'Add a new bank';
+        const deleteBankButton = 'Delete a bank';
+
+        const inlineKeyboard = Markup.inlineKeyboard([
+            // 🔦: add bank ? {}
+            [Markup.button.callback(addBankButton, 'addBankAction')],
+            // 🔦: delete bank? {}
+            [Markup.button.callback(deleteBankButton, 'deleteBankAction')],
+            [Markup.button.callback(backButton, 'backAction')],
+        ]);
+        let caption = await handleMemberBankCaption(ctx);
+        await ctx.reply(caption, { parse_mode: 'HTML', ...inlineKeyboard })
+            .then(msg => ctx.addToHistory(msg.message_id));
+
+        //  🔦: ~ void
+    }
+
+    //  ➡️ add bank {
+    //        const fetch = trigger_backoffice(getBanks)
+    //        
+    //        !fetch.success ? {
+    //            reply(sorry)
+    //            ~ void
+    //        }
+    //                            
+    //        #each fetch.data
+    //            selectBank() => {
+    //                allowPermission(enter_acc_name)
+    //                ~ void
+    //            }
+    //  }
+    async function addBankAction(ctx) {
+        try {
+            let caption = 'Select bank:\n';
+            const backButton = 'Back';
+
+            // 🔦: const fetch = trigger_backoffice(getBanks)
+            const response = await ctx.stub.getBanks();
+            let inlineKeyboard = [];
+            let buttonArray = [];
+
+            // 🔦: !fetch.success ? ❌
+            if (response.success) {
+                if (response.dataList.length) {
+                    let banks = response.dataList.sort((a, b) => (a.name.localeCompare(b.name)));
+                    // 🔦: #each fetch.data
+                    for (const bank of banks) {
+                        // 🔦: selectBank() => {}
+                        buttonArray.push(Markup.button.callback(bank.name, 'selectBankAction:' + `${bank.id}:${bank.name}`));
+                    }
+                    while (buttonArray.length > 0) {
+                        inlineKeyboard.push(buttonArray.splice(0, 3));
+                    }
+                }
+            }
+            else {
+                // 🔦: reply(sorry)
+                caption = 'Failed to get list of your banks.';
+            }
+
+            inlineKeyboard.push([Markup.button.callback(backButton, 'backAction')]);
+            inlineKeyboard = Markup.inlineKeyboard(inlineKeyboard);
+            await ctx.reply(caption, inlineKeyboard)
+                .then(msg => ctx.addToHistory(msg.message_id));
+            // 🔦: ~ void
+
+        } catch (err) {
+            await log(ctx, err);
+        }
+    }
+
+    //  ➡️ confirm delete {
+    //        confirm? {
+    //            const fetch = trigger_backoffice(deleteMemberBank)
+    //            !fetch.success ? {
+    //                go(main menu) ? {
+    //                    ➡️ main menu
+    //                }
+    //            }
+    //                
+    //            go(action center) ? {
+    //                ➡️ action center
+    //            }
+    //            ~ void
+    //        }
+    //  }
+    async function selectDeleteBank(ctx) {
+        // 🔦: confirm? {}
+        let bank_acc = ctx.session.DeleteBankList.find(function (val) {
+            return val.id == ctx.session.DeleteMemberBankId;
+        });
+        const caption = `Bank: ${bank_acc.name}\nAccount Name: ${bank_acc.accountHolderName}\nAccount No: ${bank_acc.accountNumber}\nConfirm?`;
+        const backButton = 'Back';
+        const yesButton = 'Yes';
+        const inlineKeyboard = Markup.inlineKeyboard([
+            [Markup.button.callback(yesButton, 'deleteBankAPIAction')],
+            [Markup.button.callback(backButton, 'backAction')]
+        ]);
+        await ctx.reply(caption, inlineKeyboard)
+            .then(msg => ctx.addToHistory(msg.message_id));
+    }
+
+    // _die⚡ no need a function at this level for just providing caption
+    async function handleMemberBankCaption(ctx) {
+        try {
+            let caption = 'Your bank list is empty.';
+            const response = await ctx.stub.getMemberBanks(ctx.from.id);
+
+            if (response.success && response.dataList.length) {
+                let bank_list = response.dataList.sort((a, b) => (a.name.localeCompare(b.name)));
+                /* ---------------------------- Populate member bank ---------------------------- */
+                caption = 'Your banks:\n';
+                bank_list.forEach((val) => {
+                    caption += `Bank: ${val.name || '-'}\nAccount Name: ${val.accountHolderName || '-'}\nAccount No: ${val.accountNumber || '-'}`;
+                });
+            }
+            return caption;
+        } catch (err) {
+            await log(ctx, err);
+        }
+    }
+
+    //  ➡️ 2nd point of entry : user is typing... { 
+    //        user sends 'x' {
+    //            !hasPermission(enter_acc_name) ? || !hasPermission(enter_acc_no) ? {
+    //                noComprende()
+    //                ~ void
+    //            }  
+    //               
+    //            update_bank_information = : 1st step {
+    //                is 'x' a valid bankAccountName ? {
+    //                     ~ void
+    //                } finally true {
+    //                    allowPermission(enter_acc_no)  
+    //                } => hasPermission(enter_acc_no) : 2nd step {
+    //                    is 'x' a valid bankAccountNo ? {
+    //                        ~ void
+    //                    } finally true {
+    //                        () => confirm_bank_details_are_correct: 3rd step {
+    //                              const fetch = trigger_backoffice(addMemberBank)
+    //                                  
+    //                              !fetch.success ? {
+    //                                  reply(sorry)
+    //                              }
+    //                                               
+    //                              reply(congrats!) 
+    //                              ~ void
+    //                        }                                     
+    //                    }
+    //                }
+    //            }       
+    //        }
+    //  }       
+    scene.on(message('text'), async ctx => {
+        // 🔦: !hasPermission(enter_acc_name) ? || !hasPermission(enter_acc_no) ?
+
+        // _die⚡ complicated naming
+        const sessionSettingAction = ctx.session.SettingAction ?? null;
+
+        // 🔦: update_bank_information
+        switch (sessionSettingAction) {
+            case 'EnterAccountName':
+                await onTextAccountName(ctx);
+                break;
+            case 'EnterAccountNo':
+                await onTextAccountNo(ctx);
+                break;
+            default:
+                // 🔦: noComprende()
+                clearSession(ctx);
+                await noComprende(ctx);
+        }
+    });
+
+    //  update_bank_information = : 1st step {
+    //      is 'x' a valid bankAccountName ?  {
+    //           ~ void
+    //      } finally true {
+    //          allowPermission(enter_acc_no)  
+    //      }
+    // }
+    async function onTextAccountName(ctx) {
+        ctx.session.AddBankAccountName = ctx.message.text;
+        // 🔦: is 'x' a valid bankAccountName ? ❌
+        if (ctx.session.AddBankAccountName.toString().length > 40) {
+            // 🔦: ~ void
+            await ctx.reply$('Input too long.');
+            const caption = `Bank: ${ctx.session.AddBankName}\nEnter Account Name:`;
+            const backButton = 'Back';
+            const inlineKeyboard = Markup.inlineKeyboard([
+                [Markup.button.callback(backButton, 'myBankAction')],
+            ]);
+            await ctx.reply(caption, inlineKeyboard)
+                .then(msg => ctx.addToHistory(msg.message_id))
+        } else {
+            // 🔦: finally true
+            // 🔦: allowPermission(enter_acc_no)     
+            ctx.session.SettingAction = 'EnterAccountNo';
+            const caption = `Bank: ${ctx.session.AddBankName ?? '-'}\nAccount Name: ${ctx.session.AddAccountName}\nEnter Account No:`;
+            const backButton = 'Back';
+            const inlineKeyboard = Markup.inlineKeyboard([
+                [Markup.button.callback(backButton, 'backAction')],
+            ]);
+
+            await ctx.reply(caption, inlineKeyboard)
+                .then(msg => ctx.addToHistory(msg.message_id))
+        }
+    }
+
+    //  update_bank_information: 2nd step {
+    //  is 'x' a valid bankAccountNo ? {
+    //      ~ void
+    //  } finally true {
+    //      () => confirm_bank_details_are_correct: 3rd step {
+    //          const fetch = trigger_backoffice(addMemberBank)
+    //                  
+    //          !fetch.success ? {
+    //              reply(sorry)
+    //          }
+    //                               
+    //          reply(congrats!) 
+    //          ~ void
+    //      }                                     
+    //  }
+    async function onTextAccountNo(ctx) {
+        const text = ctx.message.text;
+        const regex = /^\d+$/;
+        // 🔦: is 'x' a valid bankAccountNo ? ❌
+        if (text.toString().length > 34) {
+            await ctx.reply$('Input too long.');
+            const caption = `Bank: ${ctx.session.AddBankName ?? '-'}\nAccount Name: ${ctx.session.AddBankAccountName}\nEnter Account No:`;
+            const backButton = 'Back';
+            const inlineKeyboard = Markup.inlineKeyboard([
+                [Markup.button.callback(backButton, 'backAction')],
+            ]);
+            await ctx.reply(caption, inlineKeyboard)
+                .then(msg => ctx.addToHistory(msg.message_id));
+            // 🔦: ~ void
+        } else if (!regex.test(text)) {
+            await ctx.reply$('Invalid account number.');
+            // 🔦: ~ void
+        } else {
+            // 🔦: finally true
+            ctx.session.AddBankAccountNo = text;
+            const yesButton = 'Yes';
+            const backButton = 'Back';
+            // 🔦: () => confirm_bank_details_are_correct
+            const inlineKeyboard = Markup.inlineKeyboard([
+                [Markup.button.callback(yesButton, 'addBankAPIAction')],
+                [Markup.button.callback(backButton, 'backAction')],
+            ]);
+            const caption = `Bank: ${ctx.session.AddBankName ?? '-'}\nAccount Name: ${ctx.session.AddBankAccountName}\nAccount No: ${ctx.session.AddBankAccountNo}\nConfirm?`;
+            await ctx.reply(caption, inlineKeyboard)
+                .then(msg => ctx.addToHistory(msg.message_id));
+        }
+    }
+
+    // ➡️ main menu
+    scene.action('menuAction', async ctx => {
+        clearSession(ctx);
+        await ctx.scene.enter(シーン.MENU);
+    });
+
+    scene.action('backAction', async ctx => {
+        clearSession(ctx);
+        await ctx.scene.enter(シーン.SETTINGS);
+    });
+
+    scene.action(/.*/, noComprende);
+    scene.on(message(), noComprende);
+
+    // _die⚡ unnecessary function
+    function clearSession(ctx) {
+        ctx.session.SettingAction = null;
+        ctx.session.AddBankList = null;
+        ctx.session.AddBankId = null;
+        ctx.session.AddBankName = null;
+        ctx.session.AddBankAccountName = null;
+        ctx.session.AddBankAccountNo = null;
+
+        // ctx.session.EditBankList = null;
+        // ctx.session.EditMemberBankId = null;
+        // ctx.session.EditBankName = null;
+        // ctx.session.EditAccountName = null;
+        // ctx.session.EditBankAccountNo = null;
+
+        ctx.session.DeleteBankList = null;
+        ctx.session.DeleteMemberBankId = null;
+    }
+}
