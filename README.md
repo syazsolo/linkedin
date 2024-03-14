@@ -8,4 +8,4 @@ It was a normal day in the office when suddenly, the bosses decided to play a ga
 [reviewed(task.txt)](after.txt)
 
 ### sneak peak
-You will see me create a new language - that you understand.
+Brace for a new programming language - that you understand.
