@@ -43,7 +43,7 @@ const { シーン, noComprende, log } = require('./common.js');
 //    // most of the code in this file belongs to this main chunk
 //                      
 //    ➡️ 1st point of entry: enter scene {
-//          const fetch = trigger_backoffice(getMemberBanks) 
+//          const fetch = callServer(getMemberBanks) 
 //                
 //          !fetch.success ? {
 //              reply(sorry)
@@ -60,7 +60,7 @@ const { シーン, noComprende, log } = require('./common.js');
 //    }         
 //              
 //    ➡️ add bank {
-//          const fetch = trigger_backoffice(getBanks)
+//          const fetch = callServer(getBanks)
 //              
 //          !fetch.success ? {
 //              reply(sorry)
@@ -85,7 +85,7 @@ const { シーン, noComprende, log } = require('./common.js');
 //    }                                                          
 //                                                                    
 //    ➡️ delete bank {
-//          const fetch = trigger_backoffice(getMemberBanks) 
+//          const fetch = callServer(getMemberBanks) 
 //                                      
 //          !fetch.success ? || fetch.data.is_empty ? {
 //              reply(sorry)
@@ -109,7 +109,7 @@ const { シーン, noComprende, log } = require('./common.js');
 //                                                                    
 //    ➡️ confirm delete {
 //          confirm? {
-//              const fetch = trigger_backoffice(deleteMemberBank)
+//              const fetch = callServer(deleteMemberBank)
 //              !fetch.success ? {
 //                  go(main menu) ? {
 //                      ➡️ main menu
@@ -145,7 +145,7 @@ const { シーン, noComprende, log } = require('./common.js');
 //                          ~ void
 //                      } finally true {
 //                          () => confirm_bank_details_are_correct: 3rd step {
-//                                const fetch = trigger_backoffice(addMemberBank)
+//                                const fetch = callServer(addMemberBank)
 //                                        
 //                                !fetch.success ? {
 //                                    reply(sorry)
@@ -169,7 +169,7 @@ const { シーン, noComprende, log } = require('./common.js');
 exports.bankHandler = scene => {
 
     //  ➡️ 1st point of entry: enter scene {
-    //        const fetch = trigger_backoffice(getMemberBanks) 
+    //        const fetch = callServer(getMemberBanks) 
     //            
     //        !fetch.success ? {
     //            reply(sorry)
@@ -195,7 +195,7 @@ exports.bankHandler = scene => {
             // _die⚡ if can wrap Markup.button.callback in a function,
             // `const menuButton = callback('Main Menu', 'menuAction')` is easier to understand.
             const menuButton = Markup.button.callback('Main Menu', 'menuAction');
-            // 🔦: const fetch = trigger_backoffice(getMemberBanks)
+            // 🔦: const fetch = callServer(getMemberBanks)
             const response = await ctx.stub.getMemberBanks(ctx.from.id);
 
             // _die⚡ response.dataList
@@ -248,7 +248,7 @@ exports.bankHandler = scene => {
     // _die⚡ , why are we going to delete? 
 
     //  ➡️ delete bank {
-    //        const fetch = trigger_backoffice(getMemberBanks) 
+    //        const fetch = callServer(getMemberBanks) 
     //          
     //        !fetch.success ? || fetch.data.is_empty ? {
     //            reply(sorry)
@@ -263,7 +263,7 @@ exports.bankHandler = scene => {
         try {
             let caption = 'Select bank to delete:\n';
             const backButton = 'Back';
-            // 🔦: const fetch = trigger_backoffice(getMemberBanks)
+            // 🔦: const fetch = callServer(getMemberBanks)
             const response = await ctx.stub.getMemberBanks(ctx.from.id);
             let inlineKeyboard = [];
             let buttonArray = [];
@@ -371,7 +371,7 @@ exports.bankHandler = scene => {
     });
 
     // confirm_bank_details_are_correct: 3rd step {
-    //     const fetch = trigger_backoffice(addMemberBank)
+    //     const fetch = callServer(addMemberBank)
     //             
     //     !fetch.success ? {
     //         reply(sorry)
@@ -382,7 +382,7 @@ exports.bankHandler = scene => {
     // }   
     scene.action('addBankAPIAction', async ctx => {
         try {
-            // 🔦: const fetch = trigger_backoffice(addMemberBank)
+            // 🔦: const fetch = callServer(addMemberBank)
             const response = await ctx.stub.addMemberBank(ctx.from.id, ctx.session.AddBankAccountNo, ctx.session.AddBankAccountName, ctx.session.AddBankId);
             let caption = '';
             let inlineKeyboard = [];
@@ -422,7 +422,7 @@ exports.bankHandler = scene => {
 
     // extension ➡️ confirm delete
     //
-    //  const fetch = trigger_backoffice(deleteMemberBank)
+    //  const fetch = callServer(deleteMemberBank)
     //  (!fetch.success) {
     //      go(main menu) ? {
     //          ➡️ main menu
@@ -438,7 +438,7 @@ exports.bankHandler = scene => {
     scene.action('deleteBankAPIAction', async (ctx) => {
         // _die⚡ should not separate from ➡️ confirm delete
         try {
-            // 🔦: const fetch = trigger_backoffice(deleteMemberBank)
+            // 🔦: const fetch = callServer(deleteMemberBank)
             const response = await ctx.stub.deleteMemberBank(ctx.from.id, ctx.session.DeleteMemberBankId);
             let caption = '';
             let inlineKeyboard = [];
@@ -500,7 +500,7 @@ exports.bankHandler = scene => {
     }
 
     //  ➡️ add bank {
-    //        const fetch = trigger_backoffice(getBanks)
+    //        const fetch = callServer(getBanks)
     //        
     //        !fetch.success ? {
     //            reply(sorry)
@@ -518,7 +518,7 @@ exports.bankHandler = scene => {
             let caption = 'Select bank:\n';
             const backButton = 'Back';
 
-            // 🔦: const fetch = trigger_backoffice(getBanks)
+            // 🔦: const fetch = callServer(getBanks)
             const response = await ctx.stub.getBanks();
             let inlineKeyboard = [];
             let buttonArray = [];
@@ -555,7 +555,7 @@ exports.bankHandler = scene => {
 
     //  ➡️ confirm delete {
     //        confirm? {
-    //            const fetch = trigger_backoffice(deleteMemberBank)
+    //            const fetch = callServer(deleteMemberBank)
     //            !fetch.success ? {
     //                go(main menu) ? {
     //                    ➡️ main menu
@@ -621,7 +621,7 @@ exports.bankHandler = scene => {
     //                        ~ void
     //                    } finally true {
     //                        () => confirm_bank_details_are_correct: 3rd step {
-    //                              const fetch = trigger_backoffice(addMemberBank)
+    //                              const fetch = callServer(addMemberBank)
     //                                  
     //                              !fetch.success ? {
     //                                  reply(sorry)
@@ -696,7 +696,7 @@ exports.bankHandler = scene => {
     //      ~ void
     //  } finally true {
     //      () => confirm_bank_details_are_correct: 3rd step {
-    //          const fetch = trigger_backoffice(addMemberBank)
+    //          const fetch = callServer(addMemberBank)
     //                  
     //          !fetch.success ? {
     //              reply(sorry)
