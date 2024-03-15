@@ -7,5 +7,5 @@ It was a normal day in the office when suddenly, the bosses decided to play a ga
 ## 12am
 [`reviewed.txt`](reviewed.txt)
 
-### tip
+## tip
 Try the task first if you're feeling maverick.
