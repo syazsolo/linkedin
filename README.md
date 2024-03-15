@@ -8,4 +8,4 @@ It was a normal day in the office when suddenly, the bosses decided to play a ga
 [`reviewed.txt`](reviewed.txt)
 
 ## Mavericks
-You will do the task first.
+You will read the task first.
