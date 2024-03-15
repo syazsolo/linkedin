@@ -7,5 +7,5 @@ It was a normal day in the office when suddenly, the bosses decided to play a ga
 ## 12am
 [`reviewed.txt`](reviewed.txt)
 
-### sneak peak
-Brace to see a new programming language - that you understand.
+### tip
+Try the task first if you're feeling maverick.
