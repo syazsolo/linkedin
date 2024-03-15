@@ -8,4 +8,4 @@ It was a normal day in the office when suddenly, the bosses decided to play a ga
 [`reviewed.txt`](reviewed.txt)
 
 ### sneak peak
-Brace for a new programming language - that you understand.
+Brace to see a new programming language - that you understand.
