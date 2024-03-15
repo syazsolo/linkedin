@@ -7,5 +7,5 @@ It was a normal day in the office when suddenly, the bosses decided to play a ga
 ## 12am
 [`reviewed.txt`](reviewed.txt)
 
-## Maverick
-You will read the task first.
+## heads high
+True maverick will read the task first.
