@@ -8,4 +8,4 @@ It was a normal day in the office when suddenly, the bosses decided to play a ga
 [`reviewed.txt`](reviewed.txt)
 
 ## heads high
-True maverick will read the task first.
+True mavericks dont skip reading the task.
