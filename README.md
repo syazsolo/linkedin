@@ -8,4 +8,4 @@ It was a normal day in the office when suddenly, the bosses decided to play a ga
 [`reviewed.txt`](reviewed.txt)
 
 ## heads high
-True mavericks dont skip reading the task.
+True mavericks dont skip the task.
