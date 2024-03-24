@@ -34,10 +34,8 @@ const { シーン, noComprende, log } = require('./common.js');
 
 // start task
 
-/** *** ******************************************************************************************************************************************** */
-
 // ✨ Before we look at the actual code, lets look at the overview of what the code is trying to accomplish
-//    | ------------------------------------------------------------------------      
+//    | ----------------------------------- |
 //    |
 //    | ----------------------------------- |
 //    // most of the code in this file belongs to this main chunk
@@ -160,7 +158,7 @@ const { シーン, noComprende, log } = require('./common.js');
 //          }
 //    }       
 //    |    
-//    | --- goodluck ----------------------------------------------------------------------------
+//    | --- have fun --------------------- |
 
 // 🔦 = me with a flashlight
 // ❌ = following code is wrong
